@@ -3,72 +3,44 @@ import AppKit
 
 class WindowUtilities {
     static func configureWindow(_ window: NSWindow) {
-        window.styleMask = [.resizable, .fullSizeContentView]
+        window.styleMask = [.fullSizeContentView] // REMOVED .resizable - prevents size interference
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.backgroundColor = .clear
         window.isOpaque = false
         window.level = .floating
 
-        // Set initial size (expanded)
-        let initialWidth: CGFloat = 350 // chat (300) + sidebar (50)
-        let initialHeight: CGFloat = 500
-        window.setContentSize(NSSize(width: initialWidth, height: initialHeight))
+        // REMOVED: All window size constraints - SwiftUI handles sizing internally
+        // Set fixed window size to prevent OS-level resizing during animation
+        let fixedWidth: CGFloat = 350 // Maximum width (expanded state)
+        let fixedHeight: CGFloat = 500
+        window.setContentSize(NSSize(width: fixedWidth, height: fixedHeight))
 
-        // Set minimum size to new compact requirements
-        window.minSize = NSSize(width: 50, height: 300)  // collapsed: 50px, expanded: 300+50=350px minimum
-        window.maxSize = NSSize(width: 600, height: 800)
+        // CRITICAL: No min/max size constraints - prevents OS window resizing
 
         // Position window at bottom-right corner
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
             let windowFrame = NSRect(
-                x: screenFrame.maxX - initialWidth - 20,
+                x: screenFrame.maxX - fixedWidth - 20,
                 y: screenFrame.minY + 20,
-                width: initialWidth,
-                height: initialHeight
+                width: fixedWidth,
+                height: fixedHeight
             )
             window.setFrame(windowFrame, display: true)
         }
 
-        // Restore position and collapse state from UserDefaults
+        // Restore position from UserDefaults (collapse state handled by SwiftUI)
         restoreWindowPosition(window)
-        restoreCollapseState(window)
     }
 
-    static func updateWindowSize(_ window: NSWindow, isCollapsed: Bool) {
-        let newWidth: CGFloat = isCollapsed ? 50 : 350
-
-        // Add slight delay to better coordinate with SwiftUI animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            var newFrame = window.frame
-            newFrame.size.width = newWidth
-
-            // Adjust x position to keep right edge in same place
-            newFrame.origin.x = window.frame.maxX - newWidth
-
-            // Use custom timing to match SwiftUI easeInOut animation
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.3
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                window.animator().setFrame(newFrame, display: true)
-            }
-        }
-
-        // Save collapse state
-        UserDefaults.standard.set(isCollapsed, forKey: "WindowIsCollapsed")
-    }
+    // REMOVED: updateWindowSize() - SwiftUI handles all animations now
 
     static func getCollapseState() -> Bool {
         return UserDefaults.standard.bool(forKey: "WindowIsCollapsed")
     }
 
-    private static func restoreCollapseState(_ window: NSWindow) {
-        let isCollapsed = getCollapseState()
-        if isCollapsed {
-            updateWindowSize(window, isCollapsed: true)
-        }
-    }
+    // REMOVED: restoreCollapseState() - SwiftUI state management handles this
 
     static func saveWindowPosition(_ window: NSWindow) {
         let origin = window.frame.origin

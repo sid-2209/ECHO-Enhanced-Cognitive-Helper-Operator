@@ -4,94 +4,97 @@ struct Sidebar: View {
     @Binding var isCollapsed: Bool
     @Binding var selectedSection: SidebarSection
     @Binding var selectedModel: String
-    @State private var hoveredSection: SidebarSection?
+    @State private var hoveredButton: SidebarButton.ButtonType?
     @State private var showModelSelector = false
-    @State private var showHistoryPanel = false
     @State private var showSettings = false
 
+    private let sidebarWidth: CGFloat = 64 // Fixed width for consistency
+
     var body: some View {
-        VStack(spacing: 16) {
-            // New Conversation Button
-            Button(action: {
-                if isCollapsed {
-                    isCollapsed = false
+        VStack(spacing: 0) {
+            // MARK: - Top Section (New Chat)
+            VStack(spacing: 12) {
+                SidebarButton(
+                    type: .newChat,
+                    icon: "plus.circle.fill",
+                    isSelected: selectedSection == .chat,
+                    isHovered: hoveredButton == .newChat,
+                    action: {
+                        if isCollapsed {
+                            isCollapsed = false
+                        }
+                        startNewConversation()
+                    }
+                )
+                .onHover { isHovered in
+                    hoveredButton = isHovered ? .newChat : nil
                 }
-                startNewConversation()
-            }) {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 16))
-                    .foregroundColor(selectedSection == .chat ? .blue : .secondary)
-                    .frame(width: 32, height: 32)
             }
-            .buttonStyle(.plain)
-            .help("New Conversation")
+            .padding(.top, 20) // Top section breathing room
 
-            // Model Selector Button
-            Button(action: {
-                if isCollapsed {
-                    isCollapsed = false
+            Spacer(minLength: 20) // Visual separation between sections
+
+            // MARK: - Middle Section (Model & Tools)
+            VStack(spacing: 16) {
+                SidebarButton(
+                    type: .model,
+                    icon: "brain.head.profile",
+                    isSelected: selectedSection == .model,
+                    isHovered: hoveredButton == .model,
+                    action: {
+                        if isCollapsed {
+                            isCollapsed = false
+                        }
+                        showModelSelector.toggle()
+                    }
+                )
+                .onHover { isHovered in
+                    hoveredButton = isHovered ? .model : nil
                 }
-                showModelSelector.toggle()
-            }) {
-                Image(systemName: "cpu")
-                    .font(.system(size: 16))
-                    .foregroundColor(selectedSection == .model ? .blue : .secondary)
-                    .frame(width: 32, height: 32)
-            }
-            .buttonStyle(.plain)
-            .help("Select Model")
-            .popover(isPresented: $showModelSelector) {
-                ModelSelectorPopover(selectedModel: $selectedModel)
-            }
-
-            // History Button
-            Button(action: {
-                if isCollapsed {
-                    isCollapsed = false
+                .popover(isPresented: $showModelSelector) {
+                    ModelSelectorPopover(selectedModel: $selectedModel)
                 }
-                showHistoryPanel.toggle()
-            }) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 16))
-                    .foregroundColor(selectedSection == .history ? .blue : .secondary)
-                    .frame(width: 32, height: 32)
-            }
-            .buttonStyle(.plain)
-            .help("Chat History")
 
-            Spacer()
+                SidebarButton(
+                    type: .toggle,
+                    icon: isCollapsed ? "sidebar.left" : "sidebar.right",
+                    isSelected: false,
+                    isHovered: hoveredButton == .toggle,
+                    action: {
+                        isCollapsed.toggle()
+                    }
+                )
+                .onHover { isHovered in
+                    hoveredButton = isHovered ? .toggle : nil
+                }
+            }
 
-            // Expand/Collapse Button
-            Button(action: {
-                isCollapsed.toggle()
-            }) {
-                Image(systemName: isCollapsed ? "chevron.left" : "chevron.right")
-                    .font(.system(size: 16))
-                    .foregroundColor(.blue)
-                    .frame(width: 32, height: 32)
-            }
-            .buttonStyle(.plain)
-            .help(isCollapsed ? "Expand Chat" : "Collapse Chat")
+            Spacer() // Push bottom section to bottom
 
-            // Settings Button (at bottom)
-            Button(action: { showSettings.toggle() }) {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 16))
-                    .foregroundColor(selectedSection == .settings ? .blue : .secondary)
-                    .frame(width: 32, height: 32)
+            // MARK: - Bottom Section (Settings)
+            VStack(spacing: 12) {
+                SidebarButton(
+                    type: .settings,
+                    icon: "gearshape.fill",
+                    isSelected: selectedSection == .settings,
+                    isHovered: hoveredButton == .settings,
+                    action: { showSettings.toggle() }
+                )
+                .onHover { isHovered in
+                    hoveredButton = isHovered ? .settings : nil
+                }
+                .popover(isPresented: $showSettings) {
+                    SettingsPopover()
+                }
             }
-            .buttonStyle(.plain)
-            .help("Settings")
-            .popover(isPresented: $showSettings) {
-                SettingsPopover()
-            }
+            .padding(.bottom, 20) // Bottom section breathing room
         }
-        .padding(.vertical, 16)
-        .frame(maxHeight: .infinity)
-        .background(Color.clear)
-        .sheet(isPresented: $showHistoryPanel) {
-            ChatHistoryView(isPresented: $showHistoryPanel)
-        }
+        .frame(width: sidebarWidth) // Fixed width constraint
+        .frame(maxHeight: .infinity) // Fill available height
+        .background(
+            RoundedRectangle(cornerRadius: 0)
+                .fill(.ultraThinMaterial.opacity(0.5)) // Subtle background for definition
+        )
     }
 
     private func startNewConversation() {
@@ -102,47 +105,88 @@ struct Sidebar: View {
 }
 
 struct SidebarButton: View {
-    let section: SidebarSection
+    enum ButtonType: Hashable {
+        case newChat, model, toggle, settings
+
+        var helpText: String {
+            switch self {
+            case .newChat: return "New Conversation"
+            case .model: return "Select Model"
+            case .toggle: return "Toggle Sidebar"
+            case .settings: return "Settings"
+            }
+        }
+    }
+
+    let type: ButtonType
+    let icon: String
     let isSelected: Bool
     let isHovered: Bool
-    let isCollapsed: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: section.icon)
-                .font(.system(size: 16, weight: .medium))
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .medium)) // Slightly larger for better visibility
                 .foregroundColor(iconColor)
-                .frame(width: 28, height: 28)
+                .frame(width: 40, height: 40) // Larger touch target
                 .background(
-                    Circle()
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(backgroundColor)
-                        .scaleEffect(isHovered || isSelected ? 1.05 : 1.0)
+                        .scaleEffect(isHovered ? 1.05 : 1.0) // Subtle scale on hover
+                        .shadow(
+                            color: shadowColor,
+                            radius: shadowRadius,
+                            x: 0,
+                            y: 1
+                        )
                 )
         }
         .buttonStyle(PlainButtonStyle())
-        .help(section.title)
+        .help(type.helpText)
         .animation(.easeInOut(duration: 0.2), value: isHovered)
         .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
 
+    // MARK: - Visual Styling
+
     private var iconColor: Color {
         if isSelected {
-            return .blue
+            return .white // White on colored background
         } else if isHovered {
             return .primary
         } else {
-            return .secondary
+            return .secondary.opacity(0.8)
         }
     }
 
     private var backgroundColor: Color {
         if isSelected {
-            return .blue.opacity(0.1)
+            return .accentColor // System accent color
         } else if isHovered {
-            return .secondary.opacity(0.1)
+            return Color(NSColor.controlAccentColor).opacity(0.15) // Subtle hover state
         } else {
             return .clear
+        }
+    }
+
+    private var shadowColor: Color {
+        if isSelected {
+            return .black.opacity(0.15) // Subtle shadow for selected state
+        } else if isHovered {
+            return .black.opacity(0.08) // Light shadow on hover
+        } else {
+            return .clear
+        }
+    }
+
+    private var shadowRadius: CGFloat {
+        if isSelected {
+            return 3
+        } else if isHovered {
+            return 2
+        } else {
+            return 0
         }
     }
 }

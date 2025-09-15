@@ -8,49 +8,72 @@ struct MessageBubbleView: View {
     }
 
     var body: some View {
-        HStack {
+        HStack(spacing: 0) {
+            // User messages: right-aligned with left margin
             if isUser {
-                Spacer(minLength: 60)
+                Spacer()
             }
 
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 2) {
-                // Message content
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                // Message content bubble
                 Text(message.content ?? "")
-                    .font(.system(size: 13))
+                    .font(.system(size: 14, weight: .regular))
                     .foregroundColor(messageTextColor)
-                    .padding(.horizontal, isUser ? 10 : 8)
-                    .padding(.vertical, 6)
+                    .multilineTextAlignment(isUser ? .trailing : .leading)
+                    .padding(.horizontal, 14) // Improved: 14px horizontal padding
+                    .padding(.vertical, 10)   // Improved: 10px vertical padding
                     .background(messageBubbleColor)
                     .clipShape(messageBubbleShape)
+                    .shadow(color: shadowColor, radius: shadowRadius, x: 0, y: 1) // Added: Subtle shadow for depth
                     .textSelection(.enabled)
 
-                // Timestamp
+                // Timestamp - smaller and less prominent
                 Text(message.timestamp ?? Date(), style: .time)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.7))
-                    .padding(.horizontal, isUser ? 10 : 4)
+                    .font(.system(size: 9, weight: .regular)) // Reduced: smaller font size
+                    .foregroundColor(.secondary.opacity(0.5)) // Reduced: less prominent color
+                    .padding(.horizontal, isUser ? 8 : 2) // Adjusted padding for alignment
             }
 
+            // Assistant messages: left-aligned with right margin
             if !isUser {
-                Spacer(minLength: 60)
+                Spacer()
             }
         }
+        .padding(.vertical, 2) // Added: Small vertical spacing between messages
         .transition(.opacity.combined(with: .move(edge: isUser ? .trailing : .leading)))
     }
 
+    // MARK: - Visual Styling Properties
+
     private var messageTextColor: Color {
-        isUser ? .blue : .primary
+        if isUser {
+            return .white // White text on blue background for better contrast
+        } else {
+            return Color.primary // System primary color for assistant messages
+        }
     }
 
     private var messageBubbleColor: Color {
-        isUser ? Color.blue.opacity(0.06) : Color.secondary.opacity(0.08)
+        if isUser {
+            return Color.accentColor // Use system accent color (typically blue)
+        } else {
+            return Color(NSColor.controlBackgroundColor) // System background color for macOS
+        }
     }
 
     private var messageBubbleShape: some Shape {
         RoundedRectangle(
-            cornerRadius: 12,
+            cornerRadius: 10, // Improved: 10px rounded corners
             style: .continuous
         )
+    }
+
+    private var shadowColor: Color {
+        Color.black.opacity(0.08) // Subtle shadow for depth
+    }
+
+    private var shadowRadius: CGFloat {
+        2 // Light shadow radius for elevation
     }
 }
 

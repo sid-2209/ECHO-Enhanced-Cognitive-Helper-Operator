@@ -5,47 +5,85 @@ struct ChatHeader: View {
     @Binding var isCollapsed: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Logo/Title (smaller, far left)
-            HStack(spacing: 4) {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                // App icon for branding
                 Image(systemName: "waveform.circle.fill")
-                    .foregroundColor(.blue)
-                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.accentColor)
+                    .font(.system(size: 16, weight: .medium))
 
-                Text("Echo")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
-            }
+                // Main title with model - "Echo using [Model Name]" format
+                HStack(spacing: 0) {
+                    Text("Echo")
+                        .font(.system(size: 16, weight: .bold, design: .default))
+                        .foregroundColor(.primary)
 
-            Spacer()
+                    Text(" using ")
+                        .font(.system(size: 16, weight: .regular, design: .default))
+                        .foregroundColor(.secondary)
 
-            // Model indicator (center-aligned, compact)
-            ModelBadge(modelName: selectedModel)
-
-            Spacer()
-
-            // Minimize button (far right)
-            Button(action: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    isCollapsed.toggle()
+                    Text(selectedModel)
+                        .font(.system(size: 16, weight: .semibold, design: .default))
+                        .foregroundColor(modelColor)
                 }
-            }) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .frame(width: 16, height: 16)
-                    .background(
-                        Circle()
-                            .fill(Color.secondary.opacity(0.08))
-                    )
+
+                Spacer()
+
+                // Minimize button (far right)
+                Button(action: {
+                    isCollapsed.toggle()
+                }) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary.opacity(0.8))
+                        .frame(width: 20, height: 20)
+                        .background(
+                            Circle()
+                                .fill(Color.secondary.opacity(0.06))
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Minimize chat")
             }
-            .buttonStyle(PlainButtonStyle())
-            .help("Minimize chat")
+            .padding(.horizontal, 16)  // Increased padding for better spacing
+            .padding(.vertical, 12)    // Increased vertical padding for prominence
+
+            // Subtle separator line
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.primary.opacity(0.1),
+                            Color.primary.opacity(0.05),
+                            Color.clear
+                        ]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 0.5)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.clear)
+        .background(
+            // Subtle background with material effect
+            Rectangle()
+                .fill(.ultraThinMaterial.opacity(0.3))
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
+        )
         .draggableWindow()
+    }
+
+    // Dynamic model color based on the current model
+    private var modelColor: Color {
+        switch selectedModel.lowercased() {
+        case let name where name.contains("claude") || name.contains("sonnet"):
+            return .orange
+        case let name where name.contains("gpt"):
+            return .green
+        case let name where name.contains("ollama"):
+            return .purple
+        default:
+            return .accentColor
+        }
     }
 }
 
@@ -79,9 +117,24 @@ struct ModelBadge: View {
 }
 
 #Preview {
-    ChatHeader(
-        selectedModel: "Claude Sonnet",
-        isCollapsed: .constant(false)
-    )
-    .frame(width: 300, height: 40)
+    VStack(spacing: 0) {
+        ChatHeader(
+            selectedModel: "Claude Sonnet",
+            isCollapsed: .constant(false)
+        )
+
+        // Show different model examples
+        ChatHeader(
+            selectedModel: "GPT-4",
+            isCollapsed: .constant(false)
+        )
+
+        ChatHeader(
+            selectedModel: "Ollama",
+            isCollapsed: .constant(false)
+        )
+
+        Spacer()
+    }
+    .frame(width: 350)
 }

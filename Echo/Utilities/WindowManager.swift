@@ -36,12 +36,11 @@ class WindowManager: ObservableObject {
         window.hasShadow = true
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.styleMask = [.borderless, .resizable]
+        window.styleMask = [.borderless] // REMOVED .resizable - prevents size interference
         window.isOpaque = false
 
-        window.setContentSize(NSSize(width: 330, height: 500))
-        window.minSize = NSSize(width: 280, height: 400)
-        window.maxSize = NSSize(width: 600, height: 800)
+        // REMOVED: All window size constraints - prevents animation interference
+        // Window size handled entirely by SwiftUI content sizing
 
         restoreWindowPosition()
     }

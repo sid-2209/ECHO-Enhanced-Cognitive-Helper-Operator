@@ -1,57 +1,6 @@
 import SwiftUI
 import CoreData
 
-// Simple message model for non-Core Data storage
-struct SimpleMessage: Identifiable {
-    let id = UUID()
-    let content: String
-    let role: String // "user" or "assistant"
-    let timestamp: Date
-}
-
-// Simple message bubble component
-struct MessageBubbleSimple: View {
-    let message: SimpleMessage
-
-    private var isUser: Bool {
-        message.role == "user"
-    }
-
-    var body: some View {
-        HStack {
-            if isUser {
-                Spacer(minLength: 60)
-            }
-
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 2) {
-                Text(message.content)
-                    .font(.system(size: 13))
-                    .foregroundColor(messageTextColor)
-                    .padding(.horizontal, isUser ? 10 : 8)
-                    .padding(.vertical, 6)
-                    .background(messageBubbleColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                Text(message.timestamp, style: .time)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.7))
-                    .padding(.horizontal, isUser ? 10 : 4)
-            }
-
-            if !isUser {
-                Spacer(minLength: 60)
-            }
-        }
-    }
-
-    private var messageTextColor: Color {
-        isUser ? .blue : .primary
-    }
-
-    private var messageBubbleColor: Color {
-        isUser ? Color.blue.opacity(0.06) : Color.secondary.opacity(0.08)
-    }
-}
 
 struct MainContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -68,11 +17,20 @@ struct MainContentView: View {
     @State private var commandSuggestions: [ChatCommand] = []
     @State private var droppedImages: [NSImage] = []
 
-    // Simple message storage
-    @State private var messages: [SimpleMessage] = []
+    // Core Data integration
+    @FetchRequest(
+        sortDescriptors: [NSSortDescriptor(keyPath: \Conversation.updatedAt, ascending: false)],
+        animation: .default)
+    private var conversations: FetchedResults<Conversation>
+
+    @State private var isTyping = false
 
     private let chatWidth: CGFloat = 300  // Updated to match requirements
     private let sidebarWidth: CGFloat = 50
+
+    var currentConversation: Conversation? {
+        conversations.first
+    }
 
     var totalWidth: CGFloat {
         isCollapsed ? sidebarWidth : chatWidth + sidebarWidth
@@ -83,49 +41,64 @@ struct MainContentView: View {
             // Left Panel - Chat Window
             if !isCollapsed {
                 VStack(spacing: 0) {
-                    // Model badge at top
-                    HStack {
-                        Spacer()
-                        Text(selectedModel)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color.orange.opacity(0.08))
-                            )
-                        Spacer()
-                    }
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
+                    // Header with proper Echo branding
+                    ChatHeader(selectedModel: selectedModel, isCollapsed: $isCollapsed)
 
-                    // Messages area
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 8) {
-                            if messages.isEmpty {
-                                VStack(spacing: 8) {
-                                    Text("Welcome to Echo!")
-                                        .font(.title2)
-                                        .foregroundColor(.secondary)
-                                        .padding()
+                    // Messages area with improved layout and spacing
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(alignment: .leading, spacing: 12) { // Increased: better spacing between messages
+                                // Top breathing room
+                                Spacer(minLength: 8)
 
-                                    Text("Start a conversation...")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                if let conversation = currentConversation,
+                                   let messages = conversation.messages?.allObjects as? [Message] {
+                                    let sortedMessages = messages.sorted {
+                                        ($0.timestamp ?? Date()) < ($1.timestamp ?? Date())
+                                    }
+
+                                    ForEach(sortedMessages, id: \.id) { message in
+                                        MessageBubbleView(message: message)
+                                            .id(message.id)
+                                            .padding(.horizontal, 4) // Subtle horizontal breathing room for message bubbles
+                                    }
+                                } else {
+                                    // Welcome state with proper padding
+                                    WelcomeView(onPromptTapped: { prompt in
+                                        messageText = prompt
+                                    })
+                                    .padding(.horizontal, 8) // Additional padding for welcome content
                                 }
-                                .padding()
-                            } else {
-                                ForEach(messages) { message in
-                                    MessageBubbleSimple(message: message)
+
+                                // Typing indicator with proper spacing
+                                if isTyping {
+                                    TypingIndicator()
+                                        .padding(.horizontal, 4)
+                                        .padding(.top, 4) // Small gap above typing indicator
+                                }
+
+                                // Bottom breathing room before input area
+                                Spacer(minLength: 12)
+                            }
+                            .padding(.horizontal, 12) // Increased: proper margins around content
+                            .padding(.vertical, 8)    // Increased: better top/bottom padding
+                        }
+                        .onChange(of: currentConversation?.messages?.count) { _ in
+                            if let conversation = currentConversation,
+                               let messages = conversation.messages?.allObjects as? [Message],
+                               let lastMessage = messages.sorted(by: {
+                                   ($0.timestamp ?? Date()) < ($1.timestamp ?? Date())
+                               }).last {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        proxy.scrollTo(lastMessage.id, anchor: UnitPoint.bottom)
+                                    }
                                 }
                             }
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
                     }
 
-                    // Functional input area
+                    // Input area with proper spacing separation
                     CompactInputArea(
                         messageText: $messageText,
                         showCommandSuggestions: $showCommandSuggestions,
@@ -134,19 +107,15 @@ struct MainContentView: View {
                         sendMessage: sendMessage,
                         handleCommand: handleCommand
                     )
+                    .padding(.top, 8) // Added: separation between messages and input area
                 }
                 .frame(width: chatWidth)
-                .transition(.asymmetric(
-                    insertion: .move(edge: .leading),
-                    removal: .move(edge: .trailing)
-                ))
 
                 // Separator (thinner)
                 Rectangle()
                     .fill(Color.primary.opacity(0.06))
                     .frame(width: 0.5)
-                    .transition(.opacity)
-            }
+                }
 
             // Right Panel - Sidebar
             Sidebar(
@@ -171,12 +140,11 @@ struct MainContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
         .frame(width: totalWidth, height: 500)
+        .clipped() // CRITICAL: Ensure content is clipped to frame bounds
         .animation(.easeInOut(duration: 0.3), value: isCollapsed)
         .onChange(of: isCollapsed) { oldValue, newValue in
-            // Update window size when collapse state changes
-            if let window = NSApp.windows.first {
-                WindowUtilities.updateWindowSize(window, isCollapsed: newValue)
-            }
+            // Save collapse state to UserDefaults for persistence
+            UserDefaults.standard.set(newValue, forKey: "WindowIsCollapsed")
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UpdateOpacity"))) { notification in
             if let newOpacity = notification.object as? Double {
@@ -197,6 +165,9 @@ struct MainContentView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartNewConversation"))) { _ in
+            startNewConversation()
+        }
         .draggableWindow()
     }
 
@@ -207,32 +178,40 @@ struct MainContentView: View {
 
         let trimmedMessage = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Create user message
-        let userMessage = SimpleMessage(
-            content: trimmedMessage,
-            role: "user",
-            timestamp: Date()
-        )
-
-        // Add to messages with animation
-        withAnimation(.easeInOut(duration: 0.3)) {
-            messages.append(userMessage)
+        // Check for commands
+        if trimmedMessage.hasPrefix("/") {
+            handleCommand(trimmedMessage)
+            messageText = ""
+            return
         }
 
-        // Clear input
-        messageText = ""
+        withAnimation {
+            let conversation = getCurrentConversation()
 
-        // Simulate AI response after a delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            let aiResponse = SimpleMessage(
-                content: "I understand your message: \"\(trimmedMessage)\". This is a simulated response from \(selectedModel).",
-                role: "assistant",
-                timestamp: Date()
-            )
+            // Create user message
+            let userMessage = Message(context: viewContext)
+            userMessage.id = UUID()
+            userMessage.content = trimmedMessage
+            userMessage.role = "user"
+            userMessage.timestamp = Date()
+            userMessage.conversation = conversation
 
-            withAnimation(.easeInOut(duration: 0.3)) {
-                messages.append(aiResponse)
+            // Update conversation
+            conversation.updatedAt = Date()
+
+            do {
+                try viewContext.save()
+                isTyping = true
+
+                // Simulate AI response (replace with actual AI integration later)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    simulateAIResponse(for: conversation)
+                }
+            } catch {
+                print("Failed to save message: \(error)")
             }
+
+            messageText = ""
         }
     }
 
@@ -240,25 +219,92 @@ struct MainContentView: View {
         let cmd = command.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
 
         switch cmd {
+        case "/end":
+            startNewConversation()
         case "/clear":
-            withAnimation(.easeInOut(duration: 0.3)) {
-                messages.removeAll()
-            }
-        case "/new", "/reset":
-            withAnimation(.easeInOut(duration: 0.3)) {
-                messages.removeAll()
-            }
+            clearCurrentConversation()
         case "/claude", "/sonnet":
-            selectedModel = "Claude Sonnet"
+            switchModel("Claude Sonnet")
         case "/gpt4":
-            selectedModel = "GPT-4"
+            switchModel("GPT-4")
         case "/gpt4o":
-            selectedModel = "GPT-4o"
+            switchModel("GPT-4o")
         case "/ollama":
-            selectedModel = "Ollama"
+            switchModel("Ollama")
+        case "/screenshot", "/ss":
+            captureScreenshot()
+        case "/export":
+            exportConversation()
         default:
-            // Treat unknown commands as regular messages
-            sendMessage()
+            break
+        }
+    }
+
+    private func getCurrentConversation() -> Conversation {
+        if let existingConversation = conversations.first {
+            return existingConversation
+        }
+
+        let newConversation = Conversation(context: viewContext)
+        newConversation.id = UUID()
+        newConversation.title = "New Chat"
+        newConversation.createdAt = Date()
+        newConversation.updatedAt = Date()
+
+        return newConversation
+    }
+
+    private func startNewConversation() {
+        // Clear current conversation or create new one
+        getCurrentConversation()
+    }
+
+    private func clearCurrentConversation() {
+        if let conversation = currentConversation,
+           let messages = conversation.messages?.allObjects as? [Message] {
+            for message in messages {
+                viewContext.delete(message)
+            }
+
+            do {
+                try viewContext.save()
+            } catch {
+                print("Failed to clear conversation: \(error)")
+            }
+        }
+    }
+
+    private func switchModel(_ model: String) {
+        selectedModel = model
+        startNewConversation()
+    }
+
+    private func captureScreenshot() {
+        // TODO: Implement screenshot capture
+        print("Capturing screenshot...")
+    }
+
+    private func exportConversation() {
+        // TODO: Implement conversation export
+        print("Exporting conversation...")
+    }
+
+    private func simulateAIResponse(for conversation: Conversation) {
+        let aiMessage = Message(context: viewContext)
+        aiMessage.id = UUID()
+        aiMessage.content = "This is a simulated response from \(selectedModel). I understand your message and I'm here to help!"
+        aiMessage.role = "assistant"
+        aiMessage.timestamp = Date()
+        aiMessage.conversation = conversation
+
+        conversation.updatedAt = Date()
+
+        do {
+            try viewContext.save()
+            isTyping = false
+        } catch {
+            print("Failed to save AI response: \(error)")
+            isTyping = false
         }
     }
 }
@@ -266,14 +312,12 @@ struct MainContentView: View {
 enum SidebarSection: CaseIterable {
     case chat
     case model
-    case history
     case settings
 
     var icon: String {
         switch self {
         case .chat: return "plus.circle"
         case .model: return "cpu"
-        case .history: return "clock.arrow.circlepath"
         case .settings: return "gearshape"
         }
     }
@@ -282,7 +326,6 @@ enum SidebarSection: CaseIterable {
         switch self {
         case .chat: return "New Chat"
         case .model: return "Model"
-        case .history: return "History"
         case .settings: return "Settings"
         }
     }
